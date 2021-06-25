@@ -217,6 +217,15 @@ describe("User Registration", () => {
     const users = await User.findAll();
     expect(users.length).toBe(0);
   });
+
+  it("returns Validation Failure message in error response body when validation fails", async () => {
+    const res = await postUser({
+      username: null,
+      email: "user1@mail.com",
+      password: "validPass",
+    });
+    expect(res.body.message).toBe("Validation Failure");
+  });
 });
 
 /**
@@ -235,6 +244,18 @@ describe("Account activation", () => {
       .send();
     users = await User.findAll();
     expect(users[0].inactive).toBe(false);
+  });
+
+  it("returns Account is activated when account successfuly activated", async () => {
+    await postUser();
+    let users = await User.findAll();
+    const token = users[0].activationToken;
+
+    const res = await request(app)
+      .post("/api/1.0/users/token/" + token)
+      .send();
+
+    expect(res.body.message).toBe("Account is activated");
   });
 
   it("removes token from userTable after successful activation", async () => {
@@ -282,16 +303,52 @@ describe("Account activation", () => {
       "This account is either active or the token is invalid"
     );
   });
+});
 
-  it("returns Account is activated when account successfuly activated", async () => {
-    await postUser();
-    let users = await User.findAll();
-    const token = users[0].activationToken;
+describe("Error Model", () => {
+  it("returns path, timestamp, message and validErrs in response when validation failure", async () => {
+    const res = await postUser({ ...validUser, username: null });
+    const body = res.body;
+    expect(Object.keys(body)).toEqual([
+      "path",
+      "timestamp",
+      "message",
+      "validationErrors",
+    ]);
+  });
 
+  it("returns path, timestamp and message in res when req fails other than validErrs", async () => {
+    const token = "this-token-does-not-exist";
     const res = await request(app)
       .post("/api/1.0/users/token/" + token)
       .send();
 
-    expect(res.body.message).toBe("Account is activated");
+    const body = res.body;
+    expect(Object.keys(body)).toEqual(["path", "timestamp", "message"]);
+  });
+
+  it("returns path in error body", async () => {
+    const token = "this-token-does-not-exist";
+    const res = await request(app)
+      .post("/api/1.0/users/token/" + token)
+      .send();
+
+    const body = res.body;
+    expect(body.path).toEqual("/api/1.0/users/token/" + token);
+  });
+
+  it("returns timestamp in milliseconds whithin 5 seconds value in error body", async () => {
+    const nowInMs = new Date().getTime();
+    const fiveSecondsLater = nowInMs + 5 * 1000;
+
+    const token = "this-token-does-not-exist";
+    const res = await request(app)
+      .post("/api/1.0/users/token/" + token)
+      .send();
+
+    const body = res.body;
+
+    expect(body.timestamp).toBeGreaterThan(nowInMs);
+    expect(body.timestamp).toBeLessThan(fiveSecondsLater);
   });
 });
