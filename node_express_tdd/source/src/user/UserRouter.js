@@ -6,6 +6,8 @@ const ValidationException = require("../error/ValidationException");
 
 const pagination = require("../middleware/pagination");
 const validation = require("../middleware/validation");
+const ForbiddenException = require("../error/ForbiddenException");
+const basicAuthenticaton = require("../middleware/basicAuthentication");
 
 router.post("/users", validation, async (req, res, next) => {
   const errors = validationResult(req);
@@ -47,6 +49,19 @@ router.get("/users/:id", async (req, res, next) => {
   } catch (error) {
     next(error);
   }
+});
+
+router.put("/users/:id", basicAuthenticaton, async (req, res, next) => {
+  const authenticatedUser = req.authenticatedUser;
+
+  if (!authenticatedUser || authenticatedUser.id != req.params.id) {
+    return next(
+      new ForbiddenException("You are not authorized to update user")
+    );
+  }
+
+  await UserService.updateUser(req.params.id, req.body);
+  return res.send();
 });
 
 module.exports = router;

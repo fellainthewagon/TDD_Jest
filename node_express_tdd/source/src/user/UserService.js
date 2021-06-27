@@ -76,4 +76,10 @@ async function getUser(id) {
   return user;
 }
 
-module.exports = { save, findByEmail, activate, getUsers, getUser };
+async function updateUser(id, updatedBody) {
+  const user = await User.findOne({ where: { id: id } });
+  user.username = updatedBody.username;
+  await user.save();
+}
+
+module.exports = { save, findByEmail, activate, getUsers, getUser, updateUser };
