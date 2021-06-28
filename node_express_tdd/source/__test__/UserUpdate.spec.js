@@ -9,30 +9,38 @@ beforeAll(async () => {
 });
 
 beforeEach(async () => {
-  await User.destroy({ truncate: true });
+  await User.destroy({ truncate: { cascade: true } });
 });
 
-const putUser = (id = 5, body = null, options = {}) => {
-  const res = request(app).put("/api/1.0/users/" + id);
-
-  /* create Authorization Header */
-  if (options.auth) {
-    const { email, password } = options.auth;
-    res.auth(email, password);
-
-    // const merged = `${email}:${password}`;
-    // const base64 = Buffer.from(merged).toString("base64");
-    // res.set("Authorization", `Basic ${base64}`);
-  }
-
-  return res.send(body);
-};
+/**
+ * Funcs
+ */
 
 const activeUser = {
   username: "user1",
   email: "user1@mail.com",
   password: "3elenka",
   inactive: false,
+};
+
+const putUser = async (id = 5, body = null, options = {}) => {
+  let agent = request(app);
+  let token;
+
+  if (options.auth) {
+    const res = await agent.post("/api/1.0/auth").send(options.auth);
+    token = res.body.token;
+  }
+
+  agent = request(app).put("/api/1.0/users/" + id);
+  if (token) {
+    agent.set("Authorization", `Bearer ${token}`);
+  }
+  if (options.token) {
+    agent.set("Authorization", `Bearer ${options.token}`);
+  }
+
+  return agent.send(body);
 };
 
 const addUser = async (user = { ...activeUser }) => {
@@ -117,5 +125,10 @@ describe("User Update", () => {
     });
     const updatedUserDB = await User.findOne({ where: { id: savedUser.id } });
     expect(updatedUserDB.username).toBe(update.username);
+  });
+
+  it("returns 403 when token is not valid", async () => {
+    const res = await putUser(5, null, { token: "not real token" });
+    expect(res.status).toBe(403);
   });
 });

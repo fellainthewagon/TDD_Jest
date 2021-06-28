@@ -1,5 +1,6 @@
 const request = require("supertest");
 const app = require("../src/app");
+const bcrypt = require("bcrypt");
 const User = require("../src/user/User");
 const sequelize = require("../src/config/database");
 
@@ -8,19 +9,38 @@ beforeAll(async () => {
 });
 
 beforeEach(async () => {
-  await User.destroy({ truncate: true });
+  await User.destroy({ truncate: { cascade: true } });
 });
 
-function getUsers() {
-  return request(app).get("/api/1.0/users");
+/**
+ * Funcs
+ */
+
+async function auth(options = {}) {
+  let token;
+  if (options.auth) {
+    const res = await request(app).post("/api/1.0/auth").send(options.auth);
+    token = res.body.token;
+  }
+  return token;
+}
+
+function getUsers(options = {}) {
+  const agent = request(app).get("/api/1.0/users");
+  if (options.token) {
+    agent.set("Authorization", `Bearer ${options.token}`);
+  }
+  return agent;
 }
 
 async function addUsers(activeUserCount, inactiveUserCount = 0) {
+  const hash = await bcrypt.hash("3elenka", 10);
   for (let i = 0; i < activeUserCount + inactiveUserCount; i++) {
     await User.create({
       username: `user${i + 1}`,
       email: `user${i + 1}@mail.com`,
       inactive: i >= activeUserCount,
+      password: hash,
     });
   }
 }
@@ -111,6 +131,15 @@ describe("Listning Users", () => {
     const res = await getUsers().query({ size: "fella", page: "wagon" });
     expect(res.body.size).toBe(10);
     expect(res.body.page).toBe(0);
+  });
+
+  it("returns user page without logged in user when req has valid auth", async () => {
+    await addUsers(11);
+    const token = await auth({
+      auth: { email: "user1@mail.com", password: "3elenka" },
+    });
+    const res = await getUsers({ token });
+    expect(res.body.totalPages).toBe(1);
   });
 });
 

@@ -3,13 +3,14 @@ const app = require("../src/app");
 const User = require("../src/user/User");
 const sequelize = require("../src/config/database");
 const bcrypt = require("bcrypt");
+const Token = require("../src/auth/Token");
 
 beforeAll(async () => {
   await sequelize.sync();
 });
 
 beforeEach(async () => {
-  await User.destroy({ truncate: true });
+  await User.destroy({ truncate: { cascade: true } });
 });
 
 const activeUser = {
@@ -30,6 +31,19 @@ const postAuth = (credentials) => {
   return request(app).post("/api/1.0/auth").send(credentials);
 };
 
+const postLogout = (options = {}) => {
+  const agent = request(app).post("/api/1.0/logout");
+  if (options.token) {
+    agent.set("Authorization", `Bearer ${options.token}`);
+  }
+  return agent.send();
+};
+
+/**
+ * AUTHENTICATION
+ *
+ */
+
 describe("Authenticatiion", () => {
   it("returns 200 when credentials are correct", async () => {
     await addUser();
@@ -40,7 +54,7 @@ describe("Authenticatiion", () => {
     expect(res.status).toBe(200);
   });
 
-  it("returns only id and username when login success", async () => {
+  it("returns only id, username & token when login success", async () => {
     const user = await addUser();
     const res = await postAuth({
       email: "user1@mail.com",
@@ -48,7 +62,7 @@ describe("Authenticatiion", () => {
     });
     expect(res.body.id).toBe(user.id);
     expect(res.body.username).toBe(user.username);
-    expect(Object.keys(res.body)).toEqual(["id", "username"]);
+    expect(Object.keys(res.body)).toEqual(["id", "username", "token"]);
   });
 
   it("returns 401 when user does't exist", async () => {
@@ -127,5 +141,101 @@ describe("Authenticatiion", () => {
   it("returns 401 when password is not valid or not sent", async () => {
     const res = await postAuth({ email: "user1@mail.com" });
     expect(res.status).toBe(401);
+  });
+
+  it("returns token in res.body when credentials are correct", async () => {
+    await addUser();
+    const res = await postAuth({
+      email: "user1@mail.com",
+      password: "3elenka",
+    });
+    expect(res.body.token).not.toBeUndefined();
+  });
+});
+
+/**
+ * LOG OUT
+ *
+ */
+
+describe("Logout", () => {
+  it("returns 200 when unauthorized request send for logout", async () => {
+    const res = await postLogout();
+    expect(res.status).toBe(200);
+  });
+
+  it("removes the token from DB", async () => {
+    await addUser();
+    const res = await postAuth({
+      email: "user1@mail.com",
+      password: "3elenka",
+    });
+    const token = res.body.token;
+    await postLogout({ token });
+    const storedToken = await Token.findOne({ where: { token: token } });
+    expect(storedToken).toBeNull();
+  });
+});
+
+/**
+ * TOKEN EXPIRATION
+ *
+ */
+
+describe("Token Expiration", () => {
+  const putUser = async (id = 5, body = null, options = {}) => {
+    let agent = request(app);
+    agent = request(app).put("/api/1.0/users/" + id);
+    if (options.token) {
+      agent.set("Authorization", `Bearer ${options.token}`);
+    }
+    return agent.send(body);
+  };
+
+  it("returns 403 when token is older than 1 week", async () => {
+    const savedUser = await addUser();
+    const token = "test-token";
+    const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000 - 1);
+    await Token.create({ token, userId: savedUser.id, lastUsedAt: oneWeekAgo });
+    const validUpdate = { username: "user1-up" };
+    const res = await putUser(savedUser.id, validUpdate, { token });
+    expect(res.status).toBe(403);
+  });
+
+  it("refreshes lastUsedAt when unexpired token is used", async () => {
+    const savedUser = await addUser();
+    const token = "test-token";
+    const fourDaysAgo = new Date(Date.now() - 4 * 24 * 60 * 60 * 1000);
+    await Token.create({
+      token,
+      userId: savedUser.id,
+      lastUsedAt: fourDaysAgo,
+    });
+    const validUpdate = { username: "user1-up" };
+    const rightBeforeSendingRequest = new Date();
+    await putUser(savedUser.id, validUpdate, { token });
+    const tokenFromDB = await Token.findOne({ where: { token } });
+    expect(tokenFromDB.lastUsedAt.getTime()).toBeGreaterThan(
+      rightBeforeSendingRequest.getTime()
+    );
+  });
+
+  it("refreshes lastUsedAt when unexpired token is used for unauthenticated endpoint", async () => {
+    const savedUser = await addUser();
+    const token = "test-token";
+    const fourDaysAgo = new Date(Date.now() - 4 * 24 * 60 * 60 * 1000);
+    await Token.create({
+      token,
+      userId: savedUser.id,
+      lastUsedAt: fourDaysAgo,
+    });
+    const rightBeforeSendingRequest = new Date();
+    await request(app)
+      .get("/api/1.0/users/5")
+      .set("Authorization", `Bearer ${token}`);
+    const tokenFromDB = await Token.findOne({ where: { token } });
+    expect(tokenFromDB.lastUsedAt.getTime()).toBeGreaterThan(
+      rightBeforeSendingRequest.getTime()
+    );
   });
 });
