@@ -1,12 +1,13 @@
 const express = require("express");
 const router = express.Router();
 const UserService = require("./UserService");
-const { validationResult } = require("express-validator");
+const { validationResult, check } = require("express-validator");
 const ValidationException = require("../error/ValidationException");
 
 const pagination = require("../middleware/pagination");
 const validation = require("../middleware/validation");
 const ForbiddenException = require("../error/ForbiddenException");
+const NotFoundException = require("../error/NotFoundException");
 
 router.post("/users", validation, async (req, res, next) => {
   const errors = validationResult(req);
@@ -74,8 +75,19 @@ router.delete("/users/:id", async (req, res, next) => {
   }
 
   await UserService.deleteUser(req.params.id);
-
   res.send();
 });
+
+router.post(
+  "/password-reset",
+  check("email").isEmail().withMessage("E-mail is not valid"),
+  (req, res, next) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      throw new ValidationException(errors.array());
+    }
+    throw new NotFoundException();
+  }
+);
 
 module.exports = router;

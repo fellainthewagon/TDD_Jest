@@ -4,7 +4,7 @@ const EmailService = require("../email/EmailService");
 const sequelize = require("../config/database");
 const EmailException = require("../email/EmailException");
 const InvalidTokenException = require("../user/InvalidTokenException");
-const UserNotFoundException = require("./UserNotFoundException");
+const NotFoundException = require("../error/NotFoundException");
 const Sequelize = require("sequelize");
 const { randomString } = require("../shared/generator");
 
@@ -75,7 +75,7 @@ async function getUser(id) {
     attributes: ["id", "username", "email"],
   });
   if (!user) {
-    throw new UserNotFoundException();
+    throw new NotFoundException("User not found");
   }
   return user;
 }
