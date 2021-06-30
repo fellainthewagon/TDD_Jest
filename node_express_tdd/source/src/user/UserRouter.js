@@ -7,7 +7,11 @@ const ValidationException = require("../error/ValidationException");
 const pagination = require("../middleware/pagination");
 const validation = require("../middleware/validation");
 const ForbiddenException = require("../error/ForbiddenException");
-const NotFoundException = require("../error/NotFoundException");
+
+/**
+ * Create User (POST)
+ *
+ */
 
 router.post("/users", validation, async (req, res, next) => {
   const errors = validationResult(req);
@@ -24,6 +28,11 @@ router.post("/users", validation, async (req, res, next) => {
   }
 });
 
+/**
+ * Account Activation Request (POST)
+ *
+ */
+
 router.post("/users/token/:token", async (req, res, next) => {
   const token = req.params.token;
   try {
@@ -34,6 +43,11 @@ router.post("/users/token/:token", async (req, res, next) => {
     next(error);
   }
 });
+
+/**
+ * Get All Users (GET)
+ *
+ */
 
 router.get("/users", pagination, async (req, res) => {
   const authenticatedUser = req.authenticatedUser;
@@ -52,6 +66,11 @@ router.get("/users/:id", async (req, res, next) => {
   }
 });
 
+/**
+ * Update username (PUT)
+ *
+ */
+
 router.put("/users/:id", async (req, res, next) => {
   const authenticatedUser = req.authenticatedUser;
 
@@ -61,9 +80,14 @@ router.put("/users/:id", async (req, res, next) => {
     );
   }
 
-  await UserService.updateUser(req.params.id, req.body);
-  return res.send();
+  const user = await UserService.updateUser(req.params.id, req.body);
+  return res.send(user);
 });
+
+/**
+ * Delete user (DELETE)
+ *
+ */
 
 router.delete("/users/:id", async (req, res, next) => {
   const authenticatedUser = req.authenticatedUser;
@@ -78,15 +102,65 @@ router.delete("/users/:id", async (req, res, next) => {
   res.send();
 });
 
+/**
+ * Password Reset Request (POST)
+ *
+ */
+
 router.post(
-  "/password-reset",
+  "/user/password",
   check("email").isEmail().withMessage("E-mail is not valid"),
-  (req, res, next) => {
+  async (req, res, next) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      throw new ValidationException(errors.array());
+      return next(new ValidationException(errors.array()));
     }
-    throw new NotFoundException();
+    try {
+      await UserService.passwordResetRequest(req.body.email);
+      return res.send({ message: "Check your e-mail for resetting password" });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * Update Password (PUT)
+ *
+ */
+
+const passwordResetTokenValidator = async (req, res, next) => {
+  const user = await UserService.findByPasswordResetToken(
+    req.body.passwordResetToken
+  );
+  if (!user) {
+    return next(
+      new ForbiddenException(
+        "You are not authorized to update your passord. Please follow the password steps again"
+      )
+    );
+  }
+  next();
+};
+
+const checkPassword = check("password")
+  .notEmpty()
+  .withMessage("Password cannot be null")
+  .bail()
+  .isLength({ min: 5 })
+  .withMessage("Password must be at least 6 characters");
+
+router.put(
+  "/user/password",
+  passwordResetTokenValidator,
+  checkPassword,
+  async (req, res, next) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return next(new ValidationException(errors.array()));
+    }
+    await UserService.updatePassword(req.body);
+    res.send();
   }
 );
 

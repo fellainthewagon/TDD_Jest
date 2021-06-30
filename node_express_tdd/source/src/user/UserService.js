@@ -7,6 +7,8 @@ const InvalidTokenException = require("../user/InvalidTokenException");
 const NotFoundException = require("../error/NotFoundException");
 const Sequelize = require("sequelize");
 const { randomString } = require("../shared/generator");
+const TokenService = require("../auth/TokenService");
+const FileService = require("../file/FileService");
 
 async function save(body) {
   const { username, email, password } = body;
@@ -53,7 +55,7 @@ async function getUsers(page, size, authenticatedUser) {
         [Sequelize.Op.not]: id,
       },
     },
-    attributes: ["id", "username", "email"],
+    attributes: ["id", "username", "email", "image"],
     limit: size,
     offset: page * size,
   });
@@ -72,7 +74,7 @@ async function getUser(id) {
       id: id,
       inactive: false,
     },
-    attributes: ["id", "username", "email"],
+    attributes: ["id", "username", "email", "image"],
   });
   if (!user) {
     throw new NotFoundException("User not found");
@@ -83,11 +85,52 @@ async function getUser(id) {
 async function updateUser(id, updatedBody) {
   const user = await User.findOne({ where: { id: id } });
   user.username = updatedBody.username;
+  if (updatedBody.image) {
+    user.image = await FileService.saveProfileImage(updatedBody.image);
+  }
   await user.save();
+  return {
+    id,
+    username: user.username,
+    email: user.email,
+    image: user.image,
+  };
 }
 
 async function deleteUser(id) {
   await User.destroy({ where: { id: id } });
+}
+
+async function passwordResetRequest(email) {
+  const user = await findByEmail(email);
+  if (!user) {
+    throw new NotFoundException("E-mail is not found");
+  }
+
+  user.passwordResetToken = randomString(16);
+  await user.save();
+
+  try {
+    await EmailService.sendPasswordReset(email, user.passwordResetToken);
+  } catch (error) {
+    throw new EmailException();
+  }
+}
+
+const findByPasswordResetToken = (token) => {
+  return User.findOne({
+    where: { passwordResetToken: token },
+  });
+};
+
+async function updatePassword(updateRequest) {
+  const user = await findByPasswordResetToken(updateRequest.passwordResetToken);
+  user.password = await bcrypt.hash(updateRequest.password, 10);
+  user.passwordResetToken = null;
+  user.activationToken = null;
+  user.inactive = false;
+  await user.save();
+  await TokenService.clearTokens(user.id);
 }
 
 module.exports = {
@@ -98,4 +141,7 @@ module.exports = {
   getUser,
   updateUser,
   deleteUser,
+  passwordResetRequest,
+  updatePassword,
+  findByPasswordResetToken,
 };

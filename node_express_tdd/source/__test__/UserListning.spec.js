@@ -78,11 +78,11 @@ describe("Listning Users", () => {
     expect(res.body.content.length).toBe(6);
   });
 
-  it("returns onli id, username, email in content for each user", async () => {
+  it("returns onli id, username, email &  image in content for each user", async () => {
     await addUsers(11);
     const res = await getUsers();
     const user = res.body.content[0];
-    expect(Object.keys(user)).toEqual(["id", "username", "email"]);
+    expect(Object.keys(user)).toEqual(["id", "username", "email", "image"]);
   });
 
   it("returns 2 as totalPage when 15 active & 7 inactive users in DB", async () => {
@@ -179,7 +179,7 @@ describe("Get User", () => {
     expect(res.status).toBe(200);
   });
 
-  it("returns id, username, email in res.body when active user exist", async () => {
+  it("returns id, username, email & image in res.body when active user exist", async () => {
     const user = await User.create({
       username: "user1",
       email: "user1@mail.com",
@@ -187,7 +187,7 @@ describe("Get User", () => {
     });
 
     const res = await getUser(user.id);
-    expect(Object.keys(res.body)).toEqual(["id", "username", "email"]);
+    expect(Object.keys(res.body)).toEqual(["id", "username", "email", "image"]);
   });
 
   it("returns 404 when user is inactive", async () => {

@@ -35,6 +35,7 @@ router.post("/auth", check("email").isEmail(), async (req, res, next) => {
     id: user.id,
     username: user.username,
     token,
+    image: user.image,
   });
 });
 
