@@ -1,0 +1,13 @@
+{"message":"error","level":"error"}
+{"message":"warn","level":"warn"}
+{"message":"info","level":"info"}
+{"message":"verbose","level":"verbose"}
+{"message":"debug","level":"debug"}
+{"message":"Server has been started on port: 3000","level":"info"}
+{"message":"error","level":"error"}
+{"message":"error","level":"error"}
+2021-07-01T19:45:55.350Z error error
+2021-07-01T19:46:25.824Z [error] : error
+2021-07-01T19:46:41.479Z [error  ] : error
+2021-07-01T19:47:01.540Z [ERROR  ] : error
+2021-07-01T19:49:06.512Z [ERROR  ] : error
