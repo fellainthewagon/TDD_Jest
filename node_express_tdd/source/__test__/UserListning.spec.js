@@ -5,7 +5,9 @@ const User = require("../src/user/User");
 const sequelize = require("../src/config/database");
 
 beforeAll(async () => {
-  await sequelize.sync();
+  if (process.env.NODE_ENV === "test") {
+    await sequelize.sync();
+  }
 });
 
 beforeEach(async () => {

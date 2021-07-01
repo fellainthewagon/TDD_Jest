@@ -84,10 +84,16 @@ async function getUser(id) {
 
 async function updateUser(id, updatedBody) {
   const user = await User.findOne({ where: { id: id } });
-  user.username = updatedBody.username;
+
   if (updatedBody.image) {
+    if (user.image) {
+      await FileService.deleteProfileImage(user.image);
+    }
     user.image = await FileService.saveProfileImage(updatedBody.image);
   }
+
+  user.username = updatedBody.username;
+
   await user.save();
   return {
     id,

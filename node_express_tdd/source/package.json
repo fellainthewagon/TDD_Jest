@@ -5,7 +5,12 @@
   "main": "app.js",
   "scripts": {
     "start": "cross-env NODE_ENV=development nodemon index.js",
-    "test": "cross-env NODE_ENV=test jest --watch"
+    "test": "cross-env NODE_ENV=test jest --watch",
+    "posttest": "cross-env NODE_ENV=test npm run clean-up",
+    "clean-up": "node test-cleanup",
+    "test:staging": "cross-env NODE_ENV=staging jest -f --all --runInBand --forceExit",
+    "migrate:test": "cross-env NODE_ENV=staging sequelize-cli db:migrate",
+    "pretest:staging": "npm run migrate:test"
   },
   "keywords": [],
   "author": "",
@@ -15,8 +20,12 @@
     "config": "^3.3.6",
     "express": "^4.17.1",
     "express-validator": "^6.12.0",
+    "file-type": "^16.5.0",
     "nodemailer": "^6.6.2",
+    "pg": "^8.6.0",
+    "pg-hstore": "^2.3.4",
     "sequelize": "^6.6.2",
+    "sequelize-cli": "^6.2.0",
     "sqlite3": "^5.0.2"
   },
   "devDependencies": {

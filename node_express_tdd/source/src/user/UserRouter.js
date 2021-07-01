@@ -3,10 +3,12 @@ const router = express.Router();
 const UserService = require("./UserService");
 const { validationResult, check } = require("express-validator");
 const ValidationException = require("../error/ValidationException");
+const FileType = require("file-type");
 
 const pagination = require("../middleware/pagination");
 const validation = require("../middleware/validation");
 const ForbiddenException = require("../error/ForbiddenException");
+const FileService = require("../file/FileService");
 
 /**
  * Create User (POST)
@@ -57,6 +59,11 @@ router.get("/users", pagination, async (req, res) => {
   res.send(users);
 });
 
+/**
+ * Get User (GET)
+ *
+ */
+
 router.get("/users/:id", async (req, res, next) => {
   try {
     const user = await UserService.getUser(req.params.id);
@@ -71,18 +78,51 @@ router.get("/users/:id", async (req, res, next) => {
  *
  */
 
-router.put("/users/:id", async (req, res, next) => {
-  const authenticatedUser = req.authenticatedUser;
+const checkUsernameAnImage = [
+  check("username")
+    .notEmpty()
+    .withMessage("Username cannot be null")
+    .bail()
+    .isLength({ min: 4, max: 32 })
+    .withMessage("Must have min 4 and max 32 characters"),
+  check("image").custom(async (imageAsBase64String) => {
+    if (!imageAsBase64String) return true;
 
-  if (!authenticatedUser || authenticatedUser.id != req.params.id) {
-    return next(
-      new ForbiddenException("You are not authorized to update user")
-    );
+    const buffer = Buffer.from(imageAsBase64String, "base64");
+    if (buffer.length > 2 * 1024 * 1024) {
+      throw new Error("Your profile image cannot be bigger than 2MB");
+    }
+
+    const type = await FileType.fromBuffer(buffer);
+    if (!type || (type.mime !== "image/png" && type.mime !== "image/jpeg")) {
+      throw new Error("Only JPEG or PNG files allowed");
+    }
+
+    return true;
+  }),
+];
+
+router.put(
+  "/users/:id",
+  FileService.checkUsernameAnImage,
+  async (req, res, next) => {
+    const authenticatedUser = req.authenticatedUser;
+
+    if (!authenticatedUser || authenticatedUser.id != req.params.id) {
+      return next(
+        new ForbiddenException("You are not authorized to update user")
+      );
+    }
+
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return next(new ValidationException(errors.array()));
+    }
+
+    const user = await UserService.updateUser(req.params.id, req.body);
+    return res.send(user);
   }
-
-  const user = await UserService.updateUser(req.params.id, req.body);
-  return res.send(user);
-});
+);
 
 /**
  * Delete user (DELETE)
